@@ -1,4 +1,3 @@
-Certainly! Here's an updated **README.md** that includes the API testing endpoints with Postman and Swagger integration for your hotel booking system:
 
 ---
 
@@ -115,5 +114,3 @@ You can use **Postman** to interact with the API. Follow these steps:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-This README provides a comprehensive guide, including Postman testing, Swagger integration, setup, and usage.
