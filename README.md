@@ -77,7 +77,7 @@ You can use **Postman** to interact with the API. Follow these steps:
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository_url>
+   git clone <[repository_url](https://github.com/dmadindividual/Hotel_Management_Ap)>
    cd hotel-booking-system
    ```
 
