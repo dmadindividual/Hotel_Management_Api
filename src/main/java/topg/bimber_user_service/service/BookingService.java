@@ -83,6 +83,7 @@ public class BookingService implements IBookingService {
                 .bookingId(booking.getId())
                 .amount(room.getPrice())
                 .success(true)
+                .user(user)
                 .build();
         paymentRepository.save(payment);
 

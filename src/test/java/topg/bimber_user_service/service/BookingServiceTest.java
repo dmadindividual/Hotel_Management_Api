@@ -16,7 +16,9 @@ import topg.bimber_user_service.repository.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -157,6 +159,68 @@ public class BookingServiceTest {
         Mockito.verify(roomRepository).save(any(Room.class));
     }
 
+
+    @Test
+    @DisplayName("List all Booking")
+    void ListAllBookings(){
+        User user = new User();
+        user.setEmail("Baki");
+        user.setUsername("fola");
+
+        User user2 = new User();
+        user2.setEmail("Baki");
+        user2.setUsername("fola");
+
+        Hotel hotel = new Hotel();
+        hotel.setName("Happy Hotels");
+        hotel.setLocation("Abuja");
+
+        Room room = new Room();
+        room.setPrice(BigDecimal.valueOf(10000));
+        room.setAvailable(false);
+        room.setHotel(hotel);
+        room.setRoomType(RoomType.SINGLE);
+
+
+        Booking booking = new Booking();
+        booking.setPaid(true);
+        booking.setRoom(room);
+        booking.setUser(user);
+        booking.setStatus(BookingStatus.CONFIRMED);
+
+        Hotel hotel2 = new Hotel();
+        hotel2.setName("Happy Hotels");
+        hotel2.setLocation("Abuja");
+
+        Room room2 = new Room();
+        room2.setPrice(BigDecimal.valueOf(10000));
+        room2.setAvailable(false);
+        room2.setHotel(hotel);
+        room2.setRoomType(RoomType.SINGLE);
+
+
+        Booking booking2 = new Booking();
+        booking2.setPaid(true);
+        booking2.setRoom(room);
+        booking2.setUser(user2);
+        booking2.setStatus(BookingStatus.CONFIRMED);
+
+
+
+        List<Booking> bookingList = new ArrayList<>();
+        bookingList.add(booking);
+        bookingList.add(booking2);
+
+        when(bookingRepository.findAll()).thenReturn(bookingList);
+
+        List<BookingResponseDto> bookingResponseDtos = bookingService.listAllBookings();
+
+        assertThat(bookingResponseDtos).isNotNull();
+        assertThat(bookingResponseDtos.size()).isEqualTo(2);
+
+        Mockito.verify(bookingRepository).findAll();
+
+    }
 
 
 }

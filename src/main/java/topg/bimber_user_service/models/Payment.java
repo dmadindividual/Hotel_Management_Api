@@ -1,9 +1,6 @@
 package topg.bimber_user_service.models;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +19,9 @@ public class Payment {
     private Long bookingId;
     private BigDecimal amount;
     private boolean success;
+    @OneToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     // Constructor, Getters, and Setters
 }

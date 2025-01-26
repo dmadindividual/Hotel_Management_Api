@@ -2,6 +2,7 @@ package topg.bimber_user_service.controller;
 
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -54,6 +55,7 @@ public class HotelController {
 
     @DeleteMapping("/delete/{id}")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public ResponseEntity<String > deleteHotelById(@PathVariable("id")Long id ){
         String message = hotelService.deleteHotelById(id);
         return ResponseEntity.ok(message);

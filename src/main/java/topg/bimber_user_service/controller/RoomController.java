@@ -1,6 +1,7 @@
 package topg.bimber_user_service.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +21,6 @@ import java.util.List;
 public class RoomController {
 
     private final RoomService roomService;
-    private final UserService userService;
 
     @PostMapping
     @PreAuthorize("hasRole('ROLE_ADMIN')")
@@ -40,6 +40,7 @@ public class RoomController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public ResponseEntity<String> deleteRoom(@PathVariable Long id) {
 
         String responseMessage = roomService.deleteRoomById(id);
