@@ -1,5 +1,6 @@
 package topg.bimber_user_service.dto;
 
+import java.io.Serializable;
 import java.time.LocalDate;
 
 public record BookingResponseDto(
@@ -10,4 +11,7 @@ public record BookingResponseDto(
         LocalDate endDate,
         String status,
         boolean isPaid
-) {}
+)implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+}

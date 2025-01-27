@@ -23,7 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -54,41 +54,46 @@ public class BookingServiceTest {
     @Test
     @DisplayName("book a room")
     void bookRoom() {
+        // Create a User
         User user = new User();
         user.setUsername("Baki");
         user.setRole(Role.USER);
         user.setBalance(BigDecimal.valueOf(50000000));
-
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
 
+        // Create a Hotel
         Hotel hotel = new Hotel();
+        hotel.setId(1L); // Ensure the ID matches the booking request
         hotel.setName("Happy Hotels");
         hotel.setLocation("Abuja");
-        hotel.setId(1L);
 
+        // Mock the hotelRepository to return the hotel when it's requested by ID
+        when(hotelRepository.findById(hotel.getId())).thenReturn(Optional.of(hotel));
 
+        // Create a Room and assign the Hotel
         Room room = new Room();
+        room.setId(1L); // Ensure the ID matches the booking request
         room.setPrice(BigDecimal.valueOf(100000));
         room.setAvailable(true);
-        room.setHotel(hotel);
-        room.setPrice(BigDecimal.valueOf(10000));
+        room.setHotel(hotel); // Assign the correct hotel to the room
         room.setRoomType(RoomType.SINGLE);
-
         when(roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
+        when(roomRepository.existsByIdAndHotelId(room.getId(), hotel.getId())).thenReturn(true);
 
+        // Create a Booking
         Booking booking = new Booking();
+        booking.setId(1L);
         booking.setPaid(true);
         booking.setRoom(room);
         booking.setUser(user);
         booking.setStatus(BookingStatus.CONFIRMED);
 
-
+        // Mock Payment
         Payment payment = new Payment();
         payment.setBookingId(booking.getId());
         payment.setAmount(room.getPrice());
         payment.setSuccess(true);
-
-        Mockito.when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
+        when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
 
 
         BookingRequestDto bookingRequestDto = new BookingRequestDto(
@@ -98,27 +103,33 @@ public class BookingServiceTest {
                 LocalDate.now(),
                 LocalDate.now(),
                 true
-
         );
 
-        Mockito.when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
-        Mockito.doNothing().when(mailService).sendMail(any(NotificationEmail.class));
+        // Mock Booking save
+        when(bookingRepository.save(any(Booking.class))).thenReturn(booking);
 
+        // Mock Mail Service
+        doNothing().when(mailService).sendMail(any(NotificationEmail.class));
 
+        // Call the method under test
         BookingResponseDto bookingResponseDto = bookingService.bookRoom(bookingRequestDto);
 
+        // Assert and Verify
         assertThat(bookingResponseDto).isNotNull();
         assertThat(booking.isPaid()).isTrue();
         assertThat(booking.getRoom().getRoomType()).isEqualTo(room.getRoomType());
 
-        Mockito.verify(userRepository).findById(user.getId());
-        Mockito.verify(roomRepository).findById(room.getId());
-        Mockito.verify(bookingRepository, Mockito.times(2)).save(any(Booking.class));
-        Mockito.verify(paymentRepository).save(any(Payment.class));
-        Mockito.verify(mailService).sendMail(any(NotificationEmail.class));
-
-
+        verify(userRepository).findById(user.getId());
+        verify(roomRepository).findById(room.getId());
+        verify(roomRepository).existsByIdAndHotelId(room.getId(), hotel.getId());
+        verify(hotelRepository).findById(hotel.getId());
+        verify(bookingRepository, times(2)).save(any(Booking.class));
+        verify(paymentRepository).save(any(Payment.class));
+        verify(mailService).sendMail(any(NotificationEmail.class));
     }
+
+
+
 
 
     @Test
@@ -154,9 +165,9 @@ public class BookingServiceTest {
         assertThat(room.isAvailable()).isTrue();
 
         // Verify interactions
-        Mockito.verify(bookingRepository).findById(booking.getId());
-        Mockito.verify(bookingRepository).save(any(Booking.class));
-        Mockito.verify(roomRepository).save(any(Room.class));
+        verify(bookingRepository).findById(booking.getId());
+        verify(bookingRepository).save(any(Booking.class));
+        verify(roomRepository).save(any(Room.class));
     }
 
 
@@ -218,7 +229,7 @@ public class BookingServiceTest {
         assertThat(bookingResponseDtos).isNotNull();
         assertThat(bookingResponseDtos.size()).isEqualTo(2);
 
-        Mockito.verify(bookingRepository).findAll();
+        verify(bookingRepository).findAll();
 
     }
 

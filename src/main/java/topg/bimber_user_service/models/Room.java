@@ -32,5 +32,7 @@ public class Room {
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL)
     private List<Booking> bookings;
 
+
+
     // Getters and setters
 }

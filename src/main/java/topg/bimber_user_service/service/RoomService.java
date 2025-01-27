@@ -34,7 +34,7 @@ public class RoomService implements IRoomService {
                 .roomType(roomRequestDto.roomType())
                 .price(roomRequestDto.price())
                 .hotel(hotel)
-                .isAvailable(roomRequestDto.isAvailable())
+                .isAvailable(true)
                 .build();
         room = roomRepository.save(room);
 

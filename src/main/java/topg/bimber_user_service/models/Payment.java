@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     private Long bookingId;
     private BigDecimal amount;
     private boolean success;
@@ -23,6 +24,5 @@ public class Payment {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Constructor, Getters, and Setters
 }
 

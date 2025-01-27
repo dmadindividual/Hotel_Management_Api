@@ -38,23 +38,35 @@ public class AdminService implements IAdminService {
     @Override
     @Transactional
     public UserCreatedDto createAdmin(UserRequestDto userRequestDto) {
-        if (StringUtils.isBlank(userRequestDto.email()) ||
-                StringUtils.isBlank(userRequestDto.password()) ||
-                StringUtils.isBlank(userRequestDto.username())) {
-            return new UserCreatedDto(
-                    false,
-                    "Email, password, or username cannot be blank.",
-                    null
-            );
-        } else if (adminRepository.findByEmail(userRequestDto.email()).isPresent()) {
-            return new UserCreatedDto(
-                    false,
-                    "Email is already taken.",
-                    null
-            );
+        if (!isValidRequest(userRequestDto)) {
+            return createFailureResponse("Email, password, or username cannot be blank.");
         }
 
-        Admin admin = Admin.builder()
+        if (isEmailTaken(userRequestDto.email())) {
+            return createFailureResponse("Email is already taken.");
+        }
+
+        Admin admin = createAdminEntity(userRequestDto);
+        admin = adminRepository.save(admin);
+
+        String token = generateVerificationToken(admin);
+        sendActivationEmail(admin, token);
+
+        return createSuccessResponse(admin);
+    }
+
+    private boolean isValidRequest(UserRequestDto userRequestDto) {
+        return StringUtils.isNotBlank(userRequestDto.email()) &&
+                StringUtils.isNotBlank(userRequestDto.password()) &&
+                StringUtils.isNotBlank(userRequestDto.username());
+    }
+
+    private boolean isEmailTaken(String email) {
+        return adminRepository.findByEmail(email).isPresent();
+    }
+
+    private Admin createAdminEntity(UserRequestDto userRequestDto) {
+        return Admin.builder()
                 .id(generateUserId())
                 .username(userRequestDto.username())
                 .email(userRequestDto.email())
@@ -64,25 +76,31 @@ public class AdminService implements IAdminService {
                 .role(Role.ADMIN)
                 .enabled(false)
                 .build();
+    }
 
-        admin = adminRepository.save(admin);
-        String token = generateVerificationToken(admin);
+    private void sendActivationEmail(Admin admin, String token) {
+        String activationUrl = "http://localhost:9090/api/v1/admin/accountVerification/" + token;
+        String emailBody = String.format(
+                "Thank you for signing up to our hotel, please click on the below URL to activate your account: %s",
+                activationUrl
+        );
 
         mailService.sendMail(new NotificationEmail(
                 "Please activate your account",
                 admin.getEmail(),
-                "Thank you for signing up to our hotel, " +
-                        "please click on the below url to activate your account " +
-                        "http://localhost:9090/api/v1/admin/accountVerification/" + token
+                emailBody
         ));
-        UserResponseDto userResponseDto = new UserResponseDto(admin.getEmail(), admin.getUsername(), admin.getId());
-
-        return new UserCreatedDto(
-                true,
-                "user with " + admin.getUsername() + " created",
-                userResponseDto
-        );
     }
+
+    private UserCreatedDto createFailureResponse(String message) {
+        return new UserCreatedDto(false, message, null);
+    }
+
+    private UserCreatedDto createSuccessResponse(Admin admin) {
+        UserResponseDto userResponseDto = new UserResponseDto(admin.getEmail(), admin.getUsername(), admin.getId());
+        return new UserCreatedDto(true, "User with " + admin.getUsername() + " created", userResponseDto);
+    }
+
 
     // Generates a unique user ID for the admin
     private String generateUserId() {

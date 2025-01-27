@@ -13,14 +13,12 @@ import topg.bimber_user_service.dto.BookingResponseDto;
 import topg.bimber_user_service.exceptions.UserNotFoundInDb;
 import topg.bimber_user_service.mail.MailService;
 import topg.bimber_user_service.models.*;
-import topg.bimber_user_service.repository.BookingRepository;
-import topg.bimber_user_service.repository.PaymentRepository;
-import topg.bimber_user_service.repository.RoomRepository;
-import topg.bimber_user_service.repository.UserRepository;
+import topg.bimber_user_service.repository.*;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,61 +29,35 @@ public class BookingService implements IBookingService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
+    private final HotelRepository hotelRepository;
     private final MailService mailService;
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     // Books a room for a user and processes payment.
     @Transactional
     @Override
-    @CachePut(value = "bookings", key = "#result.id")
     public BookingResponseDto bookRoom(BookingRequestDto bookingRequestDto) {
-        User user = userRepository.findById(bookingRequestDto.userId())
-                .orElseThrow(() -> new UserNotFoundInDb("User not found"));
 
-        boolean hasActiveBooking = bookingRepository.existsByUserIdAndStatus(user.getId(), BookingStatus.CONFIRMED);
-        if (hasActiveBooking) {
-            throw new IllegalStateException("You already have an active booking. Please complete or cancel it before making a new one.");
+        User user = getEntityOrThrow(() -> userRepository.findById(bookingRequestDto.userId()), "User not found");
+
+        if (bookingRepository.existsByUserIdAndStatus(user.getId(), BookingStatus.CONFIRMED)) {
+            throw new IllegalStateException("Active booking exists. Complete or cancel it first.");
         }
 
-        Room room = roomRepository.findById(bookingRequestDto.roomId())
-                .orElseThrow(() -> new UserNotFoundInDb("Room not found"));
+        Room room = getEntityOrThrow(() -> roomRepository.findById(bookingRequestDto.roomId()), "Room not found");
 
-        Hotel hotel = room.getHotel();
-
-        if (!Objects.equals(hotel.getId(), bookingRequestDto.hotelId())) {
+        if (!roomRepository.existsByIdAndHotelId(room.getId(), bookingRequestDto.hotelId())) {
             throw new IllegalArgumentException("Room does not belong to the specified hotel");
         }
 
-        if (!room.isAvailable()) {
-            throw new IllegalStateException("Room is not available");
-        }
-
-        if (user.getBalance().compareTo(room.getPrice()) < 0) {
-            throw new IllegalStateException("Insufficient balance to book the room");
-        }
+        validateBookingConditions(user, room, room.getPrice());
 
         BigDecimal newBalance = user.getBalance().subtract(room.getPrice());
         user.setBalance(newBalance);
-        userRepository.save(user);
 
-        Booking booking = Booking.builder()
-                .user(user)
-                .room(room)
-                .startDate(bookingRequestDto.startDate())
-                .endDate(bookingRequestDto.endDate())
-                .status(BookingStatus.PENDING)
-                .isPaid(true)
-                .build();
+        Booking booking = createBooking(user, room, bookingRequestDto);
 
-        booking = bookingRepository.save(booking);
-
-        Payment payment = Payment.builder()
-                .bookingId(booking.getId())
-                .amount(room.getPrice())
-                .success(true)
-                .user(user)
-                .build();
-        paymentRepository.save(payment);
+        createPayment(user, room.getPrice(), booking.getId());
 
         room.setAvailable(false);
         roomRepository.save(room);
@@ -93,21 +65,73 @@ public class BookingService implements IBookingService {
         booking.setStatus(BookingStatus.CONFIRMED);
         bookingRepository.save(booking);
 
-        try {
-            String emailMessage = String.format(
-                    "Dear %s,\n\nThank you for booking a room at %s.\n\n" +
-                            "Your booking details:\n- Hotel: %s\n- Room: %s\n- Start Date: %s\n- End Date: %s\n\n" +
-                            "Your booking has been confirmed successfully. We look forward to hosting you!\n\n" +
-                            "Best regards,\n%s Team",
-                    user.getUsername(),
-                    hotel.getName(),
-                    hotel.getName(),
-                    room.getRoomType(),
-                    booking.getStartDate(),
-                    booking.getEndDate(),
-                    hotel.getName()
-            );
+        sendConfirmationEmail(user, room, booking);
 
+        return buildBookingResponseDto(booking);
+
+
+
+
+
+    }
+
+
+    private <T> T getEntityOrThrow(Supplier<Optional<T>> supplier, String errorMessage) {
+        return supplier.get().orElseThrow(() -> new UserNotFoundInDb(errorMessage));
+    }
+
+    private void validateBookingConditions(User user, Room room, BigDecimal roomPrice) {
+        if (!room.isAvailable()) {
+            throw new IllegalStateException("Room is not available");
+        }
+
+        if (user.getBalance().compareTo(roomPrice) < 0) {
+            throw new IllegalStateException("Insufficient balance to book the room");
+        }
+    }
+
+    private Booking createBooking(User user, Room room, BookingRequestDto bookingRequestDto) {
+        Hotel hotel = hotelRepository.findById(bookingRequestDto.hotelId())
+                .orElseThrow(() -> new UserNotFoundInDb("Hotel not found"));
+        Booking booking = Booking.builder()
+                .user(user)
+                .room(room)
+                .hotel(hotel)
+                .startDate(bookingRequestDto.startDate())
+                .endDate(bookingRequestDto.endDate())
+                .status(BookingStatus.PENDING)
+                .isPaid(true)
+                .build();
+        return bookingRepository.save(booking);
+    }
+
+    private void createPayment(User user, BigDecimal amount, Long bookingId) {
+        Payment payment = Payment.builder()
+                .bookingId(bookingId)
+                .amount(amount)
+                .success(true)
+                .user(user)
+                .build();
+        paymentRepository.save(payment);
+    }
+
+    private void sendConfirmationEmail(User user, Room room, Booking booking) {
+        Hotel hotel = room.getHotel();
+        String emailMessage = String.format(
+                "Dear %s,\n\nThank you for booking a room at %s.\n\n" +
+                        "Your booking details:\n- Hotel: %s\n- Room: %s\n- Start Date: %s\n- End Date: %s\n\n" +
+                        "Your booking has been confirmed successfully. We look forward to hosting you!\n\n" +
+                        "Best regards,\n%s Team",
+                user.getUsername(),
+                hotel.getName(),
+                hotel.getName(),
+                room.getRoomType(),
+                booking.getStartDate(),
+                booking.getEndDate(),
+                hotel.getName()
+        );
+
+        try {
             mailService.sendMail(new NotificationEmail(
                     "Room Successfully Booked",
                     user.getEmail(),
@@ -116,7 +140,9 @@ public class BookingService implements IBookingService {
         } catch (Exception e) {
             log.error("Failed to send booking confirmation email to user: {}", user.getEmail(), e);
         }
+    }
 
+    private BookingResponseDto buildBookingResponseDto(Booking booking) {
         return new BookingResponseDto(
                 booking.getId(),
                 booking.getUser().getId(),
@@ -127,6 +153,9 @@ public class BookingService implements IBookingService {
                 booking.isPaid()
         );
     }
+
+
+
 
     // Cancels an existing booking.
     @Override

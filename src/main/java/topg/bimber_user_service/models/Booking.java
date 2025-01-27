@@ -26,13 +26,15 @@ public class Booking {
     @JoinColumn(name = "room_id")
     private Room room;
 
+    @ManyToOne
+    @JoinColumn(name = "hotel_id")
+    private Hotel hotel; // Add this field to associate the Booking with a Hotel.
+
     private LocalDate startDate;
     private LocalDate endDate;
 
     @Enumerated(EnumType.STRING)
-    private BookingStatus status; // Example: CONFIRMED, CANCELLED, PENDING
+    private BookingStatus status;
 
     private boolean isPaid;
-
-
 }
