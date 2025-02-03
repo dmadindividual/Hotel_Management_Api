@@ -5,8 +5,8 @@ import java.util.List;
 
 public record HotelResponseDto(
         boolean success,
-      HotelDto hotel,
-        List<RoomResponseDto> rooms
-)implements Serializable {
+        HotelDto hotel,
+        List<PictureResponseDto> pictures
+) implements Serializable {
     private static final long serialVersionUID = 1L;
 }

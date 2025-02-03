@@ -1,10 +1,14 @@
 package topg.bimber_user_service.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import topg.bimber_user_service.dto.RoomRequestDto;
 import topg.bimber_user_service.dto.RoomResponseDto;
 import topg.bimber_user_service.models.User;
@@ -22,75 +26,82 @@ public class RoomController {
 
     private final RoomService roomService;
 
-    @PostMapping
+
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<RoomResponseDto> createRoom(@RequestBody RoomRequestDto roomRequestDto) {
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<RoomResponseDto> createRoom(
+            @RequestPart("room") String roomJson,
+            @RequestPart(value = "pictures", required = false) List<MultipartFile> pictures
+    ) throws JsonProcessingException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        RoomRequestDto roomRequestDto = objectMapper.readValue(roomJson, RoomRequestDto.class);
 
-        RoomResponseDto createdRoom = roomService.createRoom(roomRequestDto);
-        return ResponseEntity.status(201).body(createdRoom); // Return created room with HTTP 201 status
-    }
+        // Call service to create the room
+        RoomResponseDto response = roomService.createRoom(roomRequestDto, pictures);
 
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<RoomResponseDto> editRoom(@PathVariable Long id, @RequestBody RoomRequestDto roomRequestDto) {
-
-        RoomResponseDto updatedRoom = roomService.editRoomById(id, roomRequestDto);
-        return ResponseEntity.ok(updatedRoom); // Return updated room with HTTP 200 status
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ResponseEntity<String> deleteRoom(@PathVariable Long id) {
-
-        String responseMessage = roomService.deleteRoomById(id);
-        return ResponseEntity.ok(responseMessage); // Return success message with HTTP 200 status
-    }
-
-    @GetMapping("/hotel/{hotelId}")
-    public ResponseEntity<List<RoomResponseDto>> findAllRoomsByHotel(@PathVariable Long hotelId) {
-
-        List<RoomResponseDto> rooms = roomService.findAllRoomsByHotelId(hotelId);
-        return ResponseEntity.ok(rooms); // Return list of rooms with HTTP 200 status
-    }
-
-    @GetMapping("/availability/{id}")
-    public ResponseEntity<Boolean> isRoomAvailable(@PathVariable Long id) {
-        boolean isAvailable = roomService.isRoomAvailable(id);
-        return ResponseEntity.ok(isAvailable); // Return boolean value indicating availability with HTTP 200 status
-    }
-
-    @GetMapping("/available")
-    public ResponseEntity<List<RoomResponseDto>> findAllAvailableRooms() {
-        List<RoomResponseDto> availableRooms = roomService.findAllAvailableRooms();
-        return ResponseEntity.ok(availableRooms); // Return list of available rooms with HTTP 200 status
-    }
-
-    @PatchMapping("/deactivate/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<RoomResponseDto> deactivateRoom(@PathVariable Long id) {
-        RoomResponseDto deactivatedRoom = roomService.deactivateRoom(id);
-        return ResponseEntity.ok(deactivatedRoom); // Return deactivated room with HTTP 200 status
-    }
-
-    @PatchMapping("/reactivate/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<RoomResponseDto> reactivateRoom(@PathVariable Long id) {
-        RoomResponseDto reactivatedRoom = roomService.reactivateRoom(id);
-        return ResponseEntity.ok(reactivatedRoom); // Return reactivated room with HTTP 200 status
-    }
-
-    @GetMapping("/filter/type")
-    public ResponseEntity<List<RoomResponseDto>> filterRoomsByType(@RequestParam String type) {
-        List<RoomResponseDto> filteredRooms = roomService.filterRooms(type);
-        return ResponseEntity.ok(filteredRooms); // Return filtered rooms by type with HTTP 200 status
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
 
-    @GetMapping("/filter/price")
-    public ResponseEntity<List<RoomResponseDto>> filterRoomsByPrice(
-            @RequestParam BigDecimal minPrice, @RequestParam BigDecimal maxPrice) {
-        List<RoomResponseDto> filteredRooms = roomService.filterByPrice(minPrice, maxPrice);
-        return ResponseEntity.ok(filteredRooms); // Return filtered rooms by price with HTTP 200 status
+
+        // ✅ Edit a Room
+        @PutMapping("/{id}")
+        public ResponseEntity<String> editRoomById(@PathVariable Long id, @RequestBody RoomRequestDto roomRequestDto) {
+            return ResponseEntity.ok(roomService.editRoomById(id, roomRequestDto));
+        }
+
+        // ✅ Delete a Room
+        @DeleteMapping("/{id}")
+        public ResponseEntity<String> deleteRoomById(@PathVariable Long id) {
+            return ResponseEntity.ok(roomService.deleteRoomById(id));
+        }
+
+        // ✅ Get all Rooms by Hotel ID
+        @GetMapping("/hotel/{hotelId}")
+        public ResponseEntity<List<RoomResponseDto>> findAllRoomsByHotelId(@PathVariable Long hotelId) {
+            return ResponseEntity.ok(roomService.findAllRoomsByHotelId(hotelId));
+        }
+
+        // ✅ Check if Room is Available
+        @GetMapping("/{id}/availability")
+        public ResponseEntity<Boolean> isRoomAvailable(@PathVariable Long id) {
+            return ResponseEntity.ok(roomService.isRoomAvailable(id));
+        }
+
+        // ✅ Get all Available Rooms in a Hotel
+        @GetMapping("/hotel/{hotelId}/available")
+        public ResponseEntity<List<RoomResponseDto>> findAllAvailableHotelRooms(@PathVariable Long hotelId) {
+            return ResponseEntity.ok(roomService.findAllAvailableHotelRooms(hotelId));
+        }
+
+        // ✅ Deactivate a Room by Hotel ID
+        @PutMapping("/hotel/{hotelId}/deactivate/{roomId}")
+        public ResponseEntity<RoomResponseDto> deactivateRoomByHotelId(
+                @PathVariable Long hotelId, @PathVariable Long roomId) {
+            return ResponseEntity.ok(roomService.deactivateRoomByHotelId(hotelId, roomId));
+        }
+
+        // ✅ Activate a Room by Hotel ID
+        @PutMapping("/hotel/{hotelId}/activate/{roomId}")
+        public ResponseEntity<RoomResponseDto> activateRoomByHotelId(
+                @PathVariable Long hotelId, @PathVariable Long roomId) {
+            return ResponseEntity.ok(roomService.activateRoomByHotelId(hotelId, roomId));
+        }
+
+        // ✅ Filter Rooms by Type in a Hotel
+        @GetMapping("/hotel/{hotelId}/filter")
+        public ResponseEntity<List<RoomResponseDto>> filterHotelRoomByType(
+                @PathVariable Long hotelId, @RequestParam String type) {
+            return ResponseEntity.ok(roomService.filterHotelRoomByType(hotelId, type));
+        }
+
+        // ✅ Filter Rooms by Price Range and State
+        @GetMapping("/filter/price")
+        public ResponseEntity<List<RoomResponseDto>> filterByPriceAndState(
+                @RequestParam BigDecimal minPrice,
+                @RequestParam BigDecimal maxPrice,
+                @RequestParam String state) {
+            return ResponseEntity.ok(roomService.filterByPriceAndState(minPrice, maxPrice, state));
+        }
     }
-}
+

@@ -37,7 +37,7 @@ public class SecurityConfig {
         return http
                 .csrf(AbstractHttpConfigurer::disable) // Explicitly disable CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // Publicly accessible
+                        .requestMatchers("/api/auth/**", "/api/paystack/webhook/**").permitAll() // Publicly accessible
                         .requestMatchers("/api/v1/admin/accountVerification/**").permitAll()
                         .requestMatchers("/api/v1/user/accountVerification/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

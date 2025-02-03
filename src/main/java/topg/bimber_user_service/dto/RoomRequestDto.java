@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 public record RoomRequestDto(
         RoomType roomType,
         BigDecimal price,
-        Boolean isAvailable,
+        Boolean available,
         Long hotelId
 ) {
 }

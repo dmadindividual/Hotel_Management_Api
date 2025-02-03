@@ -13,6 +13,7 @@ import topg.bimber_user_service.dto.UserResponseDto;
 import topg.bimber_user_service.models.User;
 import topg.bimber_user_service.service.UserService;
 
+import java.math.BigDecimal;
 import java.security.Principal;
 
 import static org.springframework.http.HttpStatus.OK;
@@ -33,7 +34,6 @@ public class UserController {
     }
 
     @PutMapping("/me/edit/{id}")
-    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<UserResponseDto> editUserById(@Valid @RequestBody UserAndAdminUpdateDto userAndAdminUpdateDto, @PathVariable("id") String userId, Principal principal) {
         User user = userService.findByUsername(principal.getName());
 
@@ -42,7 +42,6 @@ public class UserController {
     }
 
     @DeleteMapping("/me/delete/{id}")
-    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<String> deleteUserById(@PathVariable("id") String userId , Principal principal){
         User user = userService.findByUsername(principal.getName());
         if(!user.isEnabled()){
@@ -62,6 +61,22 @@ public class UserController {
         } catch (Exception e) {
             // Handle errors like invalid token
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid or expired token.");
+        }
+    }
+
+
+    @PostMapping("/{userId}/fund")
+    public ResponseEntity<String> fundAccount(
+            @PathVariable String userId,
+            @RequestParam BigDecimal amount
+    ) {
+        try {
+            userService.fundAccount(userId, amount);
+            return ResponseEntity.ok("Account funded successfully.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("An error occurred.");
         }
     }
 }

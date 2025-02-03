@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @SpringBootApplication
 @EnableAsync
 @EnableCaching
-public class BimberUserServiceApplication {
+public class  BimberUserServiceApplication {
 
 	public static void main(String[] args) {
 		SpringApplication.run(BimberUserServiceApplication.class, args);

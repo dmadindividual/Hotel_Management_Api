@@ -19,20 +19,19 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Enumerated(EnumType.STRING) // Store the RoomType as a String in the database
-    private RoomType roomType; // Example: Single, Double, Suite
+    @Enumerated(EnumType.STRING)
+    private RoomType roomType;
 
     private BigDecimal price;
-    private boolean isAvailable;
+    private boolean available;
 
     @ManyToOne
-    @JoinColumn(name = "hotel_id")
+    @JoinColumn(name = "hotel_id", nullable = false)
     private Hotel hotel;
 
-    @OneToMany(mappedBy = "room", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Booking> bookings;
 
-
-
-    // Getters and setters
+    @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RoomPicture> pictures;
 }

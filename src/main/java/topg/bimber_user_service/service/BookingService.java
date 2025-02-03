@@ -37,62 +37,65 @@ public class BookingService implements IBookingService {
     @Transactional
     @Override
     public BookingResponseDto bookRoom(BookingRequestDto bookingRequestDto) {
-
         User user = getEntityOrThrow(() -> userRepository.findById(bookingRequestDto.userId()), "User not found");
-
-        if (bookingRepository.existsByUserIdAndStatus(user.getId(), BookingStatus.CONFIRMED)) {
-            throw new IllegalStateException("Active booking exists. Complete or cancel it first.");
-        }
-
         Room room = getEntityOrThrow(() -> roomRepository.findById(bookingRequestDto.roomId()), "Room not found");
+        Hotel hotel = getEntityOrThrow(() -> hotelRepository.findById(bookingRequestDto.hotelId()), "Hotel not found");
 
-        if (!roomRepository.existsByIdAndHotelId(room.getId(), bookingRequestDto.hotelId())) {
-            throw new IllegalArgumentException("Room does not belong to the specified hotel");
-        }
+        validateBookingConditions(user, room, bookingRequestDto);
 
-        validateBookingConditions(user, room, room.getPrice());
+        BigDecimal totalPrice = calculateTotalPrice(room.getPrice(), bookingRequestDto.startDate(), bookingRequestDto.endDate());
 
-        BigDecimal newBalance = user.getBalance().subtract(room.getPrice());
-        user.setBalance(newBalance);
+        user.setBalance(user.getBalance().subtract(totalPrice));
 
-        Booking booking = createBooking(user, room, bookingRequestDto);
+        Booking booking = createBooking(user, room, hotel, bookingRequestDto, totalPrice);
 
-        createPayment(user, room.getPrice(), booking.getId());
+        createPayment(user, totalPrice, booking.getId());
 
         room.setAvailable(false);
         roomRepository.save(room);
 
-        booking.setStatus(BookingStatus.CONFIRMED);
-        bookingRepository.save(booking);
+        scheduleRoomAvailabilityReset(room, bookingRequestDto.endDate());
 
         sendConfirmationEmail(user, room, booking);
 
         return buildBookingResponseDto(booking);
-
-
-
-
-
     }
 
+    private void validateBookingConditions(User user, Room room, BookingRequestDto bookingRequestDto) {
+        LocalDate startDate = bookingRequestDto.startDate();
+        LocalDate endDate = bookingRequestDto.endDate();
 
-    private <T> T getEntityOrThrow(Supplier<Optional<T>> supplier, String errorMessage) {
-        return supplier.get().orElseThrow(() -> new UserNotFoundInDb(errorMessage));
-    }
-
-    private void validateBookingConditions(User user, Room room, BigDecimal roomPrice) {
         if (!room.isAvailable()) {
             throw new IllegalStateException("Room is not available");
         }
 
-        if (user.getBalance().compareTo(roomPrice) < 0) {
+        if (startDate.isBefore(LocalDate.now())) {
+            throw new IllegalStateException("Cannot book a room for past dates");
+        }
+
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalStateException("End date cannot be before start date");
+        }
+
+        if (bookingRepository.existsByUserIdAndHotelIdAndStatus(user.getId(), bookingRequestDto.hotelId(), BookingStatus.CONFIRMED)) {
+            throw new IllegalStateException("You already have an active booking for this hotel");
+        }
+
+        if (bookingRepository.existsByRoomIdAndDatesOverlap(room.getId(), startDate, endDate)) {
+            throw new IllegalStateException("Room is already booked for the selected dates");
+        }
+
+        if (user.getBalance().compareTo(room.getPrice()) < 0) {
             throw new IllegalStateException("Insufficient balance to book the room");
         }
     }
 
-    private Booking createBooking(User user, Room room, BookingRequestDto bookingRequestDto) {
-        Hotel hotel = hotelRepository.findById(bookingRequestDto.hotelId())
-                .orElseThrow(() -> new UserNotFoundInDb("Hotel not found"));
+    private BigDecimal calculateTotalPrice(BigDecimal pricePerNight, LocalDate startDate, LocalDate endDate) {
+        long numberOfDays = ChronoUnit.DAYS.between(startDate, endDate);
+        return pricePerNight.multiply(BigDecimal.valueOf(numberOfDays));
+    }
+
+    private Booking createBooking(User user, Room room, Hotel hotel, BookingRequestDto bookingRequestDto, BigDecimal totalPrice) {
         Booking booking = Booking.builder()
                 .user(user)
                 .room(room)
@@ -101,6 +104,7 @@ public class BookingService implements IBookingService {
                 .endDate(bookingRequestDto.endDate())
                 .status(BookingStatus.PENDING)
                 .isPaid(true)
+                .totalPrice(totalPrice)
                 .build();
         return bookingRepository.save(booking);
     }
@@ -113,6 +117,16 @@ public class BookingService implements IBookingService {
                 .user(user)
                 .build();
         paymentRepository.save(payment);
+    }
+
+    @Async
+    private void scheduleRoomAvailabilityReset(Room room, LocalDate endDate) {
+        long delay = ChronoUnit.MILLIS.between(LocalDateTime.now(), endDate.atStartOfDay());
+
+        Executors.newSingleThreadScheduledExecutor().schedule(() -> {
+            room.setAvailable(true);
+            roomRepository.save(room);
+        }, delay, TimeUnit.MILLISECONDS);
     }
 
     private void sendConfirmationEmail(User user, Room room, Booking booking) {
@@ -154,6 +168,9 @@ public class BookingService implements IBookingService {
         );
     }
 
+    private <T> T getEntityOrThrow(Supplier<Optional<T>> supplier, String errorMessage) {
+        return supplier.get().orElseThrow(() -> new IllegalArgumentException(errorMessage));
+    }
 
 
 

@@ -11,8 +11,8 @@ public record RoomResponseDto(
         Long id,
         RoomType roomType,
         BigDecimal price,
-        Boolean isAvailable,
-        Long hotelId
+        Boolean available,
+        List<String> pictureUrls
 ) implements Serializable {
     private static final long serialVersionUID = 1L;
 

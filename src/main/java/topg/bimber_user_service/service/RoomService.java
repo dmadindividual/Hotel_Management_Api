@@ -3,54 +3,78 @@ package topg.bimber_user_service.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 import topg.bimber_user_service.dto.*;
 import topg.bimber_user_service.exceptions.UserNotFoundInDb;
-import topg.bimber_user_service.models.Hotel;
-import topg.bimber_user_service.models.Room;
-import topg.bimber_user_service.models.RoomType;
+import topg.bimber_user_service.models.*;
 import topg.bimber_user_service.repository.HotelRepository;
+import topg.bimber_user_service.repository.RoomPictureRepository;
 import topg.bimber_user_service.repository.RoomRepository;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class RoomService implements IRoomService {
     private final RoomRepository roomRepository;
     private final HotelRepository hotelRepository;
+    private final RoomPictureRepository roomPictureRepository;
+
 
     // Creates a new room and associates it with a hotel
     @Transactional
     @Override
     @CacheEvict(value = "availableRooms", allEntries = true)
-    public RoomResponseDto createRoom(RoomRequestDto roomRequestDto) {
+    public RoomResponseDto createRoom(RoomRequestDto roomRequestDto, List<MultipartFile> pictures) {
         Hotel hotel = hotelRepository.findById(roomRequestDto.hotelId())
-                .orElseThrow(() -> new UserNotFoundInDb("Hotel not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Hotel not found"));
 
         Room room = Room.builder()
+                .hotel(hotel)
                 .roomType(roomRequestDto.roomType())
                 .price(roomRequestDto.price())
-                .hotel(hotel)
-                .isAvailable(true)
+                .available(true)
                 .build();
-        room = roomRepository.save(room);
+
+        Room savedRoom = roomRepository.save(room);
+
+        List<RoomPicture> savedPictures = new ArrayList<>();
+        if (pictures != null) {
+            for (MultipartFile file : pictures) {
+                RoomPicture picture = new RoomPicture();
+                picture.setRoom(room);
+                picture.setFileName(file.getOriginalFilename());
+                picture.setFileType(file.getContentType());
+                try {
+                    picture.setData(file.getBytes());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
+                savedPictures.add(roomPictureRepository.save(picture));
+            }
+        }
 
         return new RoomResponseDto(
-                room.getId(),
-                room.getRoomType(),
-                room.getPrice(),
-                room.isAvailable(),
-                room.getHotel().getId()
+                savedRoom.getId(),
+                savedRoom.getRoomType(),
+                savedRoom.getPrice(),
+                savedRoom.isAvailable(),
+                savedPictures.stream().map(RoomPicture::getFileName).toList()
         );
     }
 
-    // Updates room details by ID
     @Override
     @Transactional
-    public RoomResponseDto editRoomById(Long id, RoomRequestDto roomRequestDto) {
+    public String editRoomById(Long id, RoomRequestDto roomRequestDto) {
         Room room = roomRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundInDb("Room not found"));
 
@@ -60,22 +84,16 @@ public class RoomService implements IRoomService {
         if (roomRequestDto.price() != null) {
             room.setPrice(roomRequestDto.price());
         }
-        if (roomRequestDto.isAvailable() != null) {
-            room.setAvailable(roomRequestDto.isAvailable());
+        if (roomRequestDto.available() != null) {
+            room.setAvailable(roomRequestDto.available());
         }
 
         room = roomRepository.save(room);
 
-        return new RoomResponseDto(
-                room.getId(),
-                room.getRoomType(),
-                room.getPrice(),
-                room.isAvailable(),
-                room.getHotel().getId()
-        );
+        return "You have successfully updated room: " + room.getId();
     }
 
-    // Deletes a room by ID
+
     @Override
     @Transactional
     public String deleteRoomById(Long id) {
@@ -85,22 +103,29 @@ public class RoomService implements IRoomService {
         return "You have successfully deleted room with id:  " + room.getId();
     }
 
-    // Finds all rooms associated with a specific hotel
+
     @Override
     public List<RoomResponseDto> findAllRoomsByHotelId(Long hotelId) {
         List<Room> rooms = roomRepository.findByHotelId(hotelId);
         return rooms.stream()
-                .map(room -> new RoomResponseDto(
-                        room.getId(),
-                        room.getRoomType(),
-                        room.getPrice(),
-                        room.isAvailable(),
-                        room.getHotel().getId()
-                ))
-                .toList();
+                .map(room-> {
+                    List<String> pictureUrls = room.getPictures().stream()
+                            .map(RoomPicture::getFileName)
+                            .toList();
+
+                    return new RoomResponseDto(
+                            room.getId(),
+                            room.getRoomType(),
+                            room.getPrice(),
+                            room.isAvailable(),
+                            pictureUrls
+                    );
+
+
+                }).collect(Collectors.toList());
     }
 
-    // Checks if a room is available by ID
+
     @Override
     public boolean isRoomAvailable(Long id) {
         return roomRepository.findById(id)
@@ -108,83 +133,110 @@ public class RoomService implements IRoomService {
                 .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + id + " not found"));
     }
 
-    // Retrieves all available rooms
+
+
     @Override
-    @Cacheable(value = "availableRooms", unless = "#result == null || #result.isEmpty()")
-    public List<RoomResponseDto> findAllAvailableRooms() {
-        List<Room> availableRooms = roomRepository.findByIsAvailable(true);
+    public List<RoomResponseDto> findAllAvailableHotelRooms(Long hotelId) {
+        List<Room> availableRooms = roomRepository.findByHotelIdAndAvailable(hotelId, true);
         return availableRooms.stream()
-                .map(room -> new RoomResponseDto(
-                        room.getId(),
-                        room.getRoomType(),
-                        room.getPrice(),
-                        room.isAvailable(),
-                        room.getHotel().getId()
-                ))
-                .toList();
+                .map(room-> {
+                    List<String> pictureUrls = room.getPictures().stream()
+                            .map(RoomPicture::getFileName)
+                            .toList();
+                    return new RoomResponseDto(
+                            room.getId(),
+                            room.getRoomType(),
+                            room.getPrice(),
+                            room.isAvailable(),
+                            pictureUrls
+                    );
+                }).collect(Collectors.toList());
     }
 
-    // Deactivates a room by ID
+
     @Override
-    public RoomResponseDto deactivateRoom(Long id) {
-        Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + id + " not found"));
+    public RoomResponseDto deactivateRoomByHotelId(Long hotelId, Long roomId) {
+        Room room = roomRepository.findByHotelIdAndId(hotelId, roomId)
+                .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + roomId + " not found in hotel with ID " + hotelId));
+
         room.setAvailable(false);
         room = roomRepository.save(room);
+        List<String> pictureUrls = room.getPictures().stream()
+                .map(RoomPicture::getFileName)
+                .toList();
 
         return new RoomResponseDto(
                 room.getId(),
                 room.getRoomType(),
                 room.getPrice(),
                 room.isAvailable(),
-                room.getHotel().getId()
+                pictureUrls
         );
     }
 
-    // Reactivates a room by ID
+
+
+
     @Override
-    public RoomResponseDto reactivateRoom(Long id) {
-        Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + id + " not found"));
+    public RoomResponseDto activateRoomByHotelId(Long hotelId, Long roomId) {
+        Room room = roomRepository.findByHotelIdAndId(hotelId, roomId)
+                .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + roomId + " not found in hotel with ID " + hotelId));
+
         room.setAvailable(true);
         room = roomRepository.save(room);
+        List<String> pictureUrls = room.getPictures().stream()
+                .map(RoomPicture::getFileName)
+                .toList();
 
         return new RoomResponseDto(
                 room.getId(),
                 room.getRoomType(),
                 room.getPrice(),
                 room.isAvailable(),
-                room.getHotel().getId()
+                pictureUrls
         );
     }
 
-    // Filters rooms by type
+
     @Override
-    public List<RoomResponseDto> filterRooms(String type) {
-        List<Room> rooms = roomRepository.findByRoomType(RoomType.valueOf(type));
+    public List<RoomResponseDto> filterHotelRoomByType(Long hotelId, String type) {
+        List<Room> rooms = roomRepository.findByHotelIdAndRoomType(hotelId, RoomType.valueOf(type.toUpperCase()));
+
         return rooms.stream()
-                .map(room -> new RoomResponseDto(
-                        room.getId(),
-                        room.getRoomType(),
-                        room.getPrice(),
-                        room.isAvailable(),
-                        room.getHotel().getId()
-                ))
-                .toList();
+                .map(room-> {
+                    List<String> pictureUrls = room.getPictures().stream()
+                            .map(RoomPicture::getFileName)
+                            .toList();
+                    return new RoomResponseDto(
+                            room.getId(),
+                            room.getRoomType(),
+                            room.getPrice(),
+                            room.isAvailable(),
+                            pictureUrls
+                    );
+                }).collect(Collectors.toList());
     }
 
-    // Filters rooms by price range
+
     @Override
-    public List<RoomResponseDto> filterByPrice(BigDecimal minPrice, BigDecimal maxPrice) {
-        List<Room> rooms = roomRepository.findByPriceBetween(minPrice, maxPrice);
+    public List<RoomResponseDto> filterByPriceAndState(BigDecimal minPrice, BigDecimal maxPrice, String state) {
+        List<Room> rooms = roomRepository.findByPriceBetweenAndHotel_State(minPrice, maxPrice, State.valueOf(state.toUpperCase()));
+
+
         return rooms.stream()
-                .map(room -> new RoomResponseDto(
-                        room.getId(),
-                        room.getRoomType(),
-                        room.getPrice(),
-                        room.isAvailable(),
-                        room.getHotel().getId()
-                ))
-                .toList();
+                .map(room-> {
+                    List<String> pictureUrls = room.getPictures().stream()
+                            .map(RoomPicture::getFileName)
+                            .toList();
+                    return new RoomResponseDto(
+                            room.getId(),
+                            room.getRoomType(),
+                            room.getPrice(),
+                            room.isAvailable(),
+                            pictureUrls
+                    );
+                }).collect(Collectors.toList());
     }
+
+
 }

@@ -24,6 +24,7 @@ import topg.bimber_user_service.repository.AdminRepository;
 import topg.bimber_user_service.repository.UserRepository;
 import topg.bimber_user_service.repository.UserVerificationRepository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Random;
@@ -60,8 +61,8 @@ public class UserService implements IUserService {
                 .password(passwordEncoder.encode(userRequestDto.password()))
                 .createdAt(Date.from(Instant.now()))
                 .updatedAt(Date.from(Instant.now()))
-                .balance(userRequestDto.amount())
                 .role(Role.USER)
+                .balance(BigDecimal.ZERO)
                 .enabled(false)
                 .build();
         user = userRepository.save(user);
@@ -147,6 +148,20 @@ public class UserService implements IUserService {
         return "User with id " + userId + " has been successfully deleted.";
     }
 
+    @Override
+    public String fundAccount(String userId, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be greater than zero.");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundInDb("User not found"));
+
+        user.setBalance(user.getBalance().add(amount));
+        userRepository.save(user);
+        return "You have successfully funded your account with " + amount;
+    }
+
     public JwtResponseDto loginUser(LoginRequestDto loginRequestDto) {
         // Authenticate the user
         Authentication authentication = authenticateUser(loginRequestDto);
@@ -191,4 +206,7 @@ public class UserService implements IUserService {
         return userRepository.findByUsername(username).orElseThrow(() ->
                 new UsernameNotFoundException("User with username " + username + " not found"));
     }
+
+
+
 }

@@ -28,7 +28,7 @@ public class Booking {
 
     @ManyToOne
     @JoinColumn(name = "hotel_id")
-    private Hotel hotel; // Add this field to associate the Booking with a Hotel.
+    private Hotel hotel;
 
     private LocalDate startDate;
     private LocalDate endDate;

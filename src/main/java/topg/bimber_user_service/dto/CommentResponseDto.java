@@ -1,4 +1,11 @@
 package topg.bimber_user_service.dto;
 
-public record CommentResponseDto() {
+import java.time.LocalDateTime;
+
+public record CommentResponseDto(
+        Long id,
+        String content,
+        LocalDateTime createdAt,
+        String username
+) {
 }
