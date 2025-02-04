@@ -3,9 +3,8 @@ package topg.bimber_user_service.service;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import topg.bimber_user_service.dto.BookingRequestDto;
@@ -16,8 +15,13 @@ import topg.bimber_user_service.models.*;
 import topg.bimber_user_service.repository.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -102,7 +106,7 @@ public class BookingService implements IBookingService {
                 .hotel(hotel)
                 .startDate(bookingRequestDto.startDate())
                 .endDate(bookingRequestDto.endDate())
-                .status(BookingStatus.PENDING)
+                .status(BookingStatus.CONFIRMED)
                 .isPaid(true)
                 .totalPrice(totalPrice)
                 .build();
@@ -132,10 +136,21 @@ public class BookingService implements IBookingService {
     private void sendConfirmationEmail(User user, Room room, Booking booking) {
         Hotel hotel = room.getHotel();
         String emailMessage = String.format(
-                "Dear %s,\n\nThank you for booking a room at %s.\n\n" +
-                        "Your booking details:\n- Hotel: %s\n- Room: %s\n- Start Date: %s\n- End Date: %s\n\n" +
-                        "Your booking has been confirmed successfully. We look forward to hosting you!\n\n" +
-                        "Best regards,\n%s Team",
+                """
+                        Dear %s,
+                        
+                        Thank you for booking a room at %s.
+                        
+                        Your booking details:
+                        - Hotel: %s
+                        - Room: %s
+                        - Start Date: %s
+                        - End Date: %s
+                        
+                        Your booking has been confirmed successfully. We look forward to hosting you!
+                        
+                        Best regards,
+                        %s Team""",
                 user.getUsername(),
                 hotel.getName(),
                 hotel.getName(),
@@ -176,20 +191,83 @@ public class BookingService implements IBookingService {
 
     // Cancels an existing booking.
     @Override
-    @CacheEvict(value = "bookings", key = "#bookingId")
-    public String cancelBooking(Long bookingId) {
+    public String cancelBooking(Long bookingId, String userId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new UserNotFoundInDb("Booking not found"));
 
-        booking.setStatus(BookingStatus.CANCELLED);
-        bookingRepository.save(booking);
+        // Ensure only the user who booked the room can cancel it
+        if (!booking.getUser().getId().equals(userId)) {
+            throw new IllegalStateException("You can only cancel your own booking.");
+        }
 
+        // Ensure only confirmed bookings can be cancelled
+        if (!booking.getStatus().equals(BookingStatus.CONFIRMED)) {
+            throw new IllegalStateException("Only confirmed bookings can be cancelled.");
+        }
+
+        // Restore room availability
         Room room = booking.getRoom();
         room.setAvailable(true);
         roomRepository.save(room);
 
-        return "Booking with ID " + bookingId + " has been cancelled successfully";
+        // Refund the user
+        User user = booking.getUser();
+        user.setBalance(user.getBalance().add(room.getPrice()));
+        userRepository.save(user);
+
+        // Update booking status to CANCELLED
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+
+        // Send cancellation email to the user
+        sendCancellationEmail(user, room, booking);
+
+        return "Booking with ID " + bookingId + " has been cancelled successfully. Refund processed.";
     }
+
+
+    private void sendCancellationEmail(User user, Room room, Booking booking) {
+        Hotel hotel = room.getHotel();
+        String emailMessage = String.format(
+                """
+                        Dear %s,
+                        
+                        Your booking at %s has been successfully cancelled.
+                        
+                        Booking details:
+                        - Hotel: %s
+                        - Room: %s
+                        - Start Date: %s
+                        - End Date: %s
+                        
+                        A refund of %s has been credited back to your account.
+                        
+                        We hope to see you again soon!
+                        
+                        Best regards,
+                        %s Team""",
+                user.getUsername(),
+                hotel.getName(),
+                hotel.getName(),
+                room.getRoomType(),
+                booking.getStartDate(),
+                booking.getEndDate(),
+                room.getPrice(),
+                hotel.getName()
+        );
+
+        try {
+            mailService.sendMail(new NotificationEmail(
+                    "Booking Cancellation Confirmation",
+                    user.getEmail(),
+                    emailMessage
+            ));
+        } catch (Exception e) {
+            log.error("Failed to send booking cancellation email to user: {}", user.getEmail(), e);
+        }
+    }
+
+
 
     // Updates an existing booking.
     @Override
@@ -221,7 +299,6 @@ public class BookingService implements IBookingService {
 
     // Retrieves all bookings.
     @Override
-    @Cacheable(value = "bookings")
     public List<BookingResponseDto> listAllBookings() {
         List<Booking> bookings = bookingRepository.findAll();
         return bookings.stream()

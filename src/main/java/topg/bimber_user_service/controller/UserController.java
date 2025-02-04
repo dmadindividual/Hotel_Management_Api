@@ -25,7 +25,6 @@ public class UserController {
     private final UserService userService;
 
 
-
     @GetMapping("/me/{id}")
     public ResponseEntity<UserResponseDto> getUserById(@PathVariable("id") String userId, Principal principal) {
         User user = userService.findByUsername(principal.getName());
@@ -42,13 +41,13 @@ public class UserController {
     }
 
     @DeleteMapping("/me/delete/{id}")
-    public ResponseEntity<String> deleteUserById(@PathVariable("id") String userId , Principal principal){
+    public ResponseEntity<String> deleteUserById(@PathVariable("id") String userId, Principal principal) {
         User user = userService.findByUsername(principal.getName());
-        if(!user.isEnabled()){
+        if (!user.isEnabled()) {
             throw new IllegalStateException("Your account is not activated. Please activate your account.");
 
         }
-        String message = userService.deleteUserById( userId);
+        String message = userService.deleteUserById(userId);
         return ResponseEntity.ok(message);
     }
 
@@ -66,6 +65,7 @@ public class UserController {
 
 
     @PostMapping("/{userId}/fund")
+    @PreAuthorize("hasRole('ROLE_USER')")
     public ResponseEntity<String> fundAccount(
             @PathVariable String userId,
             @RequestParam BigDecimal amount

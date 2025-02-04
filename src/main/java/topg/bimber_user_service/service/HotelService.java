@@ -1,11 +1,10 @@
 package topg.bimber_user_service.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import topg.bimber_user_service.dto.*;
+import topg.bimber_user_service.exceptions.InvalidStateException;
 import topg.bimber_user_service.exceptions.InvalidUserInputException;
 import topg.bimber_user_service.models.Hotel;
 import topg.bimber_user_service.models.Picture;
@@ -29,12 +28,13 @@ public class HotelService implements IHotelService {
     // Creates a new hotel and saves it in the repository
     @Transactional
     @Override
-    @CacheEvict(value = {"hotel", "hotels"}, allEntries = true)
-    public HotelResponseDto createHotel(String name,  String state,String location, String description, List<String> amenities, List<MultipartFile> pictures) {
+    public HotelResponseDto createHotel(String name, String state, String location, String description, List<String> amenities, List<MultipartFile> pictures) {
         // Step 1: Create the Hotel from the request DTO
+        State stateEnum = State.valueOf(state.toUpperCase());
+
         Hotel hotel = new Hotel();
         hotel.setName(name);
-        hotel.setState(State.valueOf(state));
+        hotel.setState(stateEnum);
         hotel.setLocation(location);
         hotel.setAmenities(amenities);
         hotel.setDescription(description);
@@ -63,7 +63,7 @@ public class HotelService implements IHotelService {
                 .map(picture -> new PictureResponseDto(picture.getId(), picture.getFileName(), picture.getFileType()))
                 .collect(Collectors.toList());
 
-        HotelDto hotelDto = new HotelDto(hotel.getId(), hotel.getName(), hotel.getState(),hotel.getLocation(), hotel.getAmenities(), hotel.getDescription(), pictureResponseDtos);
+        HotelDto hotelDto = new HotelDto(hotel.getId(), hotel.getName(), hotel.getState(), hotel.getLocation(), hotel.getAmenities(), hotel.getDescription(), pictureResponseDtos);
 
         return new HotelResponseDto(true, hotelDto, pictureResponseDtos);
     }
@@ -96,11 +96,9 @@ public class HotelService implements IHotelService {
                 .collect(Collectors.toList());
     }
 
-
     // Edits an existing hotel by its ID
     @Transactional
     @Override
-    @CacheEvict(value = {"hotel", "hotels"}, allEntries = true)
     public String editHotelById(Long id, HotelRequestDto hotelRequestDto) {
         Hotel hotel = hotelRepository.findById(id)
                 .orElseThrow(() -> new InvalidUserInputException("Id not found"));
@@ -121,12 +119,15 @@ public class HotelService implements IHotelService {
             hotel.setState(hotelRequestDto.state());
         }
 
+        if (hotelRequestDto.location() != null) {
+            hotel.setLocation(hotelRequestDto.location());
+        }
+
         hotel = hotelRepository.save(hotel);
-        return  "Hotel with Id : " + hotel.getId() + " has successfully been edited";
+        return "Hotel with Id : " + hotel.getId() + " has successfully been edited";
     }
 
     @Override
-    @Cacheable(value = "hotel", key = "#id")
     public HotelDtoFilter getHotelById(Long id) {
         Hotel hotel = hotelRepository.findById(id)
                 .orElseThrow(() -> new InvalidUserInputException("Id not found"));
@@ -145,9 +146,7 @@ public class HotelService implements IHotelService {
     }
 
 
-
     @Override
-    @CacheEvict(value = {"hotel", "hotels"}, allEntries = true)
     public String deleteHotelById(Long id) {
         Hotel hotel = hotelRepository.findById(id)
                 .orElseThrow(() -> new InvalidUserInputException("Id not found"));
@@ -160,6 +159,36 @@ public class HotelService implements IHotelService {
     public Integer getTotalHotelsInState(String state) {
         State stateName = State.valueOf(state.toUpperCase());
         return hotelRepository.countByState(stateName);
+    }
+
+    @Override
+    public List<HotelDtoFilter> getMostBookedHotelsByState(String stateName) {
+
+        if (stateName == null || stateName.trim().isEmpty()) {
+            throw new InvalidStateException("State cannot be empty.");
+        }
+
+        State state = State.valueOf(stateName.toUpperCase());
+
+        List<Hotel> hotels = hotelRepository.findMostBookedHotelsByState(state);
+
+        return hotels.stream()
+                .map(hotel -> {
+                    List<String> pictureUrls = hotel.getPictures().stream()
+                            .map(Picture::getFileName)
+                            .collect(Collectors.toList());
+
+                    return new HotelDtoFilter(
+                            hotel.getId(),
+                            hotel.getName(),
+                            hotel.getState(),
+                            hotel.getLocation(),
+                            hotel.getAmenities(),
+                            hotel.getDescription(),
+                            pictureUrls
+                    );
+                })
+                .collect(Collectors.toList());
     }
 
 

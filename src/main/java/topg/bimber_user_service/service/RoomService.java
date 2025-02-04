@@ -1,8 +1,6 @@
 package topg.bimber_user_service.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +30,6 @@ public class RoomService implements IRoomService {
     // Creates a new room and associates it with a hotel
     @Transactional
     @Override
-    @CacheEvict(value = "availableRooms", allEntries = true)
     public RoomResponseDto createRoom(RoomRequestDto roomRequestDto, List<MultipartFile> pictures) {
         Hotel hotel = hotelRepository.findById(roomRequestDto.hotelId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Hotel not found"));
@@ -132,6 +129,7 @@ public class RoomService implements IRoomService {
                 .map(Room::isAvailable)
                 .orElseThrow(() -> new UserNotFoundInDb("Room with ID " + id + " not found"));
     }
+
 
 
 

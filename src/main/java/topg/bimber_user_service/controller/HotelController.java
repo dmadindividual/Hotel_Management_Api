@@ -11,6 +11,7 @@ import topg.bimber_user_service.dto.HotelDto;
 import topg.bimber_user_service.dto.HotelDtoFilter;
 import topg.bimber_user_service.dto.HotelRequestDto;
 import topg.bimber_user_service.dto.HotelResponseDto;
+import topg.bimber_user_service.exceptions.*;
 import topg.bimber_user_service.models.State;
 import topg.bimber_user_service.models.User;
 import topg.bimber_user_service.service.HotelService;
@@ -24,52 +25,127 @@ import java.util.List;
 @RequiredArgsConstructor
 public class HotelController {
     private final HotelService hotelService;
-    private final UserService userService;
 
 
     @PostMapping("/create")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<HotelResponseDto> createHotel(
+    public ResponseEntity<?> createHotel(
             @RequestParam("name") String name,
             @RequestParam("state") String state,
-            @RequestParam("state") String location,
-            @RequestParam("state") String description,
+            @RequestParam("location") String location,
+            @RequestParam("description") String description, // Fixed duplicate `state`
             @RequestParam("amenities[]") List<String> amenities,
             @RequestParam("pictures[]") List<MultipartFile> pictures) {
 
-        // Call the service to create the hotel with the provided data
-        HotelResponseDto message = hotelService.createHotel(name, state,location, description, amenities, pictures);
-
-        // Return the response
-        return ResponseEntity.ok(message);
+        try {
+            HotelResponseDto response = hotelService.createHotel(name, state, location, description, amenities, pictures);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("Failed to create hotel", e.getMessage()));
+        }
     }
 
     @GetMapping("/state/{state}")
-    public ResponseEntity<List<HotelDtoFilter>> getHotelsByState(@PathVariable String state) {
-        List<HotelDtoFilter> hotels = hotelService.getHotelsByState(state);
-        return ResponseEntity.ok(hotels);
+    public ResponseEntity<?> getHotelsByState(@PathVariable String state) {
+        try {
+            List<HotelDtoFilter> hotels = hotelService.getHotelsByState(state);
+
+            if (hotels.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ErrorResponse("No hotels found", "No hotels available in the state: " + state));
+            }
+
+            return ResponseEntity.ok(hotels);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to retrieve hotels", e.getMessage()));
+        }
     }
+
 
     @PutMapping("/edit/{id}")
     @PreAuthorize("hasRole('ROLE_ADMIN')")
-    public ResponseEntity<String > editHotelById(@PathVariable("id")Long id, @RequestBody HotelRequestDto hotelRequestDto){
-
-        String message = hotelService.editHotelById(id, hotelRequestDto);
-        return ResponseEntity.ok(message);
+    public ResponseEntity<?> editHotelById(@PathVariable("id") Long id, @RequestBody HotelRequestDto hotelRequestDto) {
+        try {
+            String message = hotelService.editHotelById(id, hotelRequestDto);
+            return ResponseEntity.ok(new SuccessResponse("Hotel updated successfully", message));
+        } catch (HotelNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponse("Hotel not found", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ErrorResponse("Invalid input", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to update hotel", e.getMessage()));
+        }
     }
+
 
     @GetMapping("/hotels/{id}")
-    public ResponseEntity<HotelDtoFilter> getHotelById(@PathVariable("id")Long id){
-        HotelDtoFilter message = hotelService.getHotelById(id);
-        return ResponseEntity.ok(message);
+    public ResponseEntity<?> getHotelById(@PathVariable("id") Long id) {
+        try {
+            HotelDtoFilter hotel = hotelService.getHotelById(id);
+            return ResponseEntity.ok(hotel);
+        } catch (HotelNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponse("Hotel not found", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to retrieve hotel", e.getMessage()));
+        }
     }
 
+
     @GetMapping("/count")
-    public ResponseEntity<Integer> getTotalHotelsInState(@RequestParam String state) {
+    public ResponseEntity<?> getTotalHotelsInState(@RequestParam String state) {
         try {
-            return ResponseEntity.ok(hotelService.getTotalHotelsInState(state));
+            int count = hotelService.getTotalHotelsInState(state);
+
+            if (count == 0) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new SuccessResponse("No Hotels Found", "There are no hotels available in the state: " + state));
+            }
+
+            return ResponseEntity.ok(new SuccessResponse("Total hotels retrieved successfully", String.valueOf(count)));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(0); // Return 0 if invalid state
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new SuccessResponse("Invalid State", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new SuccessResponse("Failed to retrieve total hotels", e.getMessage()));
+        }
+    }
+
+
+    @GetMapping("/most-booked/{state}")
+    public ResponseEntity<?> getMostBookedHotelsByState(@PathVariable String state) {
+        try {
+            List<HotelDtoFilter> hotels = hotelService.getMostBookedHotelsByState(state);
+
+            if (hotels.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new SuccessResponse("No Hotels Found", "No booked hotels found in state: " + state));
+            }
+
+            return ResponseEntity.ok(new SuccessListResponse<>("Most booked hotels retrieved successfully", hotels));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new SuccessResponse("Invalid State", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new SuccessResponse("Failed to retrieve most booked hotels", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/delete/{id}")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    public ResponseEntity<String> deleteHotel(@PathVariable Long id) {
+        try {
+            String message = hotelService.deleteHotelById(id);
+            return ResponseEntity.ok(message);
+        } catch (InvalidUserInputException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 

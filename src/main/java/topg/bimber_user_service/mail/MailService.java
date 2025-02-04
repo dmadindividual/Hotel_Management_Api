@@ -16,10 +16,10 @@ import topg.bimber_user_service.models.NotificationEmail;
 @AllArgsConstructor
 public class MailService {
     private final JavaMailSender javaMailSender;
-    private  final MailContentBuilder mailContentBuilder;
+    private final MailContentBuilder mailContentBuilder;
 
     @Async
-    public void sendMail(NotificationEmail notificationEmail){
+    public void sendMail(NotificationEmail notificationEmail) {
         MimeMessagePreparator mimeMessagePreparator = mimeMessage -> {
             MimeMessageHelper messageHelper = new MimeMessageHelper(mimeMessage);
             messageHelper.setFrom("Temitope@gmail.com");
@@ -27,11 +27,11 @@ public class MailService {
             messageHelper.setSubject(notificationEmail.getSubject());
             messageHelper.setText(mailContentBuilder.build(notificationEmail.getBody()));
         };
-        try{
+        try {
             javaMailSender.send(mimeMessagePreparator);
             log.info("Activation email sent");
 
-        }catch (MailException mailException){
+        } catch (MailException mailException) {
             throw new MailNotSentException("Exception occurred when sending mail to " + notificationEmail.getRecipient());
 
         }

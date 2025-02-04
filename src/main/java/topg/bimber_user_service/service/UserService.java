@@ -2,8 +2,6 @@ package topg.bimber_user_service.service;
 
 import io.micrometer.common.util.StringUtils;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,7 +18,6 @@ import topg.bimber_user_service.exceptions.MailNotSentException;
 import topg.bimber_user_service.exceptions.UserNotFoundInDb;
 import topg.bimber_user_service.mail.MailService;
 import topg.bimber_user_service.models.*;
-import topg.bimber_user_service.repository.AdminRepository;
 import topg.bimber_user_service.repository.UserRepository;
 import topg.bimber_user_service.repository.UserVerificationRepository;
 
@@ -34,27 +31,39 @@ import java.util.UUID;
 @Service
 public class UserService implements IUserService {
     private final UserRepository userRepository;
-    private final AdminRepository adminRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final UserVerificationRepository userVerificationRepository;
     private final JwtUtils jwtUtils;
     private final MailService mailService;
-    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
-
     // Creates a new user and sends a verification email
     @Transactional
     @Override
     public UserCreatedDto createUser(UserRequestDto userRequestDto) {
+        validateUserInput(userRequestDto);
+
+        User user = buildUser(userRequestDto);
+        user = userRepository.save(user);
+
+        String token = generateVerificationToken(user);
+        sendVerificationEmail(user, token);
+
+        return buildUserCreatedResponse(user);
+    }
+
+    private void validateUserInput(UserRequestDto userRequestDto) {
         if (StringUtils.isBlank(userRequestDto.email()) ||
                 StringUtils.isBlank(userRequestDto.password()) ||
                 StringUtils.isBlank(userRequestDto.username())) {
             throw new InvalidUserInputException("Email, password, or username cannot be blank.");
-        } else if (userRepository.findByEmail(userRequestDto.email()).isPresent()) {
+        }
+        if (userRepository.findByEmail(userRequestDto.email()).isPresent()) {
             throw new InvalidUserInputException("Email is already Taken");
         }
+    }
 
-        User user = User.builder()
+    private User buildUser(UserRequestDto userRequestDto) {
+        return User.builder()
                 .id(generateUserId())
                 .username(userRequestDto.username())
                 .email(userRequestDto.email())
@@ -65,21 +74,25 @@ public class UserService implements IUserService {
                 .balance(BigDecimal.ZERO)
                 .enabled(false)
                 .build();
-        user = userRepository.save(user);
-        String token = generateVerificationToken(user);
+    }
+
+    private void sendVerificationEmail(User user, String token) {
+        String activationUrl = "http://localhost:9090/api/v1/user/accountVerification/" + token;
+        String message = "Thank you for signing up to our hotel, please click on the below url to activate your account: " + activationUrl;
 
         mailService.sendMail(new NotificationEmail(
                 "Please activate your account",
                 user.getEmail(),
-                "Thank you for signing up to our hotel, " +
-                        "please click on the below url to activate you account " +
-                        "http://localhost:9090/api/v1/user/accountVerification/" + token
+                message
         ));
+    }
+
+    private UserCreatedDto buildUserCreatedResponse(User user) {
         UserResponseDto userResponseDto = new UserResponseDto(user.getEmail(), user.getUsername(), user.getId());
 
         return new UserCreatedDto(
                 true,
-                "user with " + user.getUsername() + " created",
+                "User with " + user.getUsername() + " created",
                 userResponseDto
         );
     }
@@ -170,8 +183,6 @@ public class UserService implements IUserService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         UserDetailsServiceImpl userDetails = (UserDetailsServiceImpl) authentication.getPrincipal();
-        String username = userDetails.getUsername();
-
         // Generate JWT token for the authenticated user
         String jwt = jwtUtils.generateToken(userDetails);
 

@@ -17,4 +17,5 @@ public interface IHotelService {
     String deleteHotelById(Long id);
     Integer getTotalHotelsInState(String state);
 
+    List<HotelDtoFilter> getMostBookedHotelsByState(String stateName);
 }

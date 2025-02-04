@@ -2,10 +2,9 @@ package topg.bimber_user_service.models;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.web.multipart.MultipartFile;
+
 
 
 @Data
@@ -26,7 +25,7 @@ public class Picture {
     private String fileType;
 
     @Lob
-    private byte[] data; // Store the image as bytes
+    private byte[] data;
 
 
     public Picture(String fileName, String fileType, Hotel hotel, byte[] data) {

@@ -9,7 +9,7 @@ public interface IBookingService {
 
     BookingResponseDto bookRoom(BookingRequestDto bookingRequestDto);
 
-    String cancelBooking(Long bookingId);
+    String cancelBooking(Long bookingId, String userId);
 
     BookingResponseDto updateBooking(Long bookingId, BookingRequestDto bookingRequestDto);
 

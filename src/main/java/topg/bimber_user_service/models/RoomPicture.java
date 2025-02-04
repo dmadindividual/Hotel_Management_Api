@@ -22,8 +22,7 @@ public class RoomPicture {
     private String fileType;
 
     @Lob
-    private byte[] data; // Store the image as bytes
-
+    private byte[] data;
 
     public RoomPicture(String fileName, String fileType, Room room, byte[] data) {
     }

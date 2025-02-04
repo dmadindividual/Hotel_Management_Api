@@ -10,7 +10,7 @@ import org.thymeleaf.context.Context;
 public class MailContentBuilder {
     private final TemplateEngine templateEngine;
 
-    String build(String message){
+    String build(String message) {
         Context context = new Context();
         context.setVariable("verificationLink", message);
         return templateEngine.process("Mail", context);
