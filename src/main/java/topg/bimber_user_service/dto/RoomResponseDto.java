@@ -7,7 +7,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record RoomResponseDto(
+public record RoomResponseDto (
         Long id,
         RoomType roomType,
         BigDecimal price,

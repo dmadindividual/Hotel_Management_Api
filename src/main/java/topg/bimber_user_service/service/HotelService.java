@@ -1,6 +1,8 @@
 package topg.bimber_user_service.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import topg.bimber_user_service.dto.*;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
+@EnableCaching
 public class HotelService implements IHotelService {
 
     private final HotelRepository hotelRepository;
@@ -69,6 +72,7 @@ public class HotelService implements IHotelService {
     }
 
     @Override
+    @Cacheable(value = "hotelsByState", key = "#stateName", unless = "#result == null", cacheManager = "cacheManager")
     public List<HotelDtoFilter> getHotelsByState(String stateName) {
         State state = State.valueOf(stateName.toUpperCase());
         List<Hotel> hotels = hotelRepository.findByState(state);
@@ -128,6 +132,7 @@ public class HotelService implements IHotelService {
     }
 
     @Override
+    @Cacheable(value = "hotelById", key = "#id", unless = "#result == null")
     public HotelDtoFilter getHotelById(Long id) {
         Hotel hotel = hotelRepository.findById(id)
                 .orElseThrow(() -> new InvalidUserInputException("Id not found"));
@@ -162,6 +167,7 @@ public class HotelService implements IHotelService {
     }
 
     @Override
+    @Cacheable(value = "mostBookedHotelsByState", key = "#stateName", unless = "#result == null")
     public List<HotelDtoFilter> getMostBookedHotelsByState(String stateName) {
 
         if (stateName == null || stateName.trim().isEmpty()) {

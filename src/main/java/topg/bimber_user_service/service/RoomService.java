@@ -1,6 +1,8 @@
 package topg.bimber_user_service.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,6 +95,7 @@ public class RoomService implements IRoomService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "roomsByHotelId", key = "#id")
     public String deleteRoomById(Long id) {
         Room room = roomRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundInDb("Room not found"));
@@ -102,6 +105,7 @@ public class RoomService implements IRoomService {
 
 
     @Override
+    @Cacheable(value = "roomsByHotelId", key = "#hotelId")
     public List<RoomResponseDto> findAllRoomsByHotelId(Long hotelId) {
         List<Room> rooms = roomRepository.findByHotelId(hotelId);
         return rooms.stream()
@@ -134,6 +138,7 @@ public class RoomService implements IRoomService {
 
 
     @Override
+    @Cacheable(value = "availableRoomsByHotelId", key = "#hotelId")
     public List<RoomResponseDto> findAllAvailableHotelRooms(Long hotelId) {
         List<Room> availableRooms = roomRepository.findByHotelIdAndAvailable(hotelId, true);
         return availableRooms.stream()
@@ -197,6 +202,7 @@ public class RoomService implements IRoomService {
 
 
     @Override
+    @Cacheable(value = "roomsByType", key = "#hotelId + '_' + #type")
     public List<RoomResponseDto> filterHotelRoomByType(Long hotelId, String type) {
         List<Room> rooms = roomRepository.findByHotelIdAndRoomType(hotelId, RoomType.valueOf(type.toUpperCase()));
 

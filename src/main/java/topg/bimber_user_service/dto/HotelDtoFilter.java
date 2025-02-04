@@ -2,6 +2,7 @@ package topg.bimber_user_service.dto;
 
 import topg.bimber_user_service.models.State;
 
+import java.io.Serializable;
 import java.util.List;
 
 public record HotelDtoFilter(
@@ -12,5 +13,7 @@ public record HotelDtoFilter(
         List<String> amenities,
         String description,
         List<String> pictureUrls
-) {
+) implements Serializable {
+    private static final long serialVersionUID = 1L;
+
 }
