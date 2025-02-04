@@ -11,7 +11,7 @@ public record BookingResponseDto(
         LocalDate endDate,
         String status,
         boolean isPaid
-)implements Serializable {
-    private static final long serialVersionUID = 1L;
+)  {
+
 
 }

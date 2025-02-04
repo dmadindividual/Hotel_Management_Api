@@ -13,7 +13,7 @@ public record HotelDtoFilter(
         List<String> amenities,
         String description,
         List<String> pictureUrls
-) implements Serializable {
-    private static final long serialVersionUID = 1L;
+)   {
+
 
 }
