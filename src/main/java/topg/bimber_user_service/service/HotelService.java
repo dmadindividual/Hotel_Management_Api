@@ -3,6 +3,7 @@ package topg.bimber_user_service.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import topg.bimber_user_service.dto.*;
@@ -29,6 +30,27 @@ public class HotelService implements IHotelService {
     private final PictureRepository pictureRepository;
 
     // Creates a new hotel and saves it in the repository
+    @Async
+    public void savePictures(List<MultipartFile> pictures, Hotel hotel) {
+        List<Picture> savedPictures = new ArrayList<>();
+        for (MultipartFile file : pictures) {
+            Picture picture = new Picture();
+            picture.setHotel(hotel);
+            picture.setFileName(file.getOriginalFilename());
+            picture.setFileType(file.getContentType());
+            try {
+                picture.setData(file.getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException("Error reading file data", e);
+            }
+
+            savedPictures.add(picture);
+        }
+
+        // Save all pictures in a single batch
+        pictureRepository.saveAll(savedPictures);
+    }
+
     @Transactional
     @Override
     public HotelResponseDto createHotel(String name, String state, String location, String description, List<String> amenities, List<MultipartFile> pictures) {
@@ -41,30 +63,21 @@ public class HotelService implements IHotelService {
         hotel.setLocation(location);
         hotel.setAmenities(amenities);
         hotel.setDescription(description);
-        hotel = hotelRepository.save(hotel);
+        hotel = hotelRepository.save(hotel); // Save the hotel first
 
-        // Step 2: Handle Pictures
-        List<Picture> savedPictures = new ArrayList<>();
-        if (pictures != null) {
-            for (MultipartFile file : pictures) {
-                // Create Picture entity for each file
-                Picture picture = new Picture();
-                picture.setHotel(hotel);
-                picture.setFileName(file.getOriginalFilename());
-                picture.setFileType(file.getContentType());
-                try {
-                    picture.setData(file.getBytes());
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        // Step 2: Handle Pictures (Asynchronously)
+        List<PictureResponseDto> pictureResponseDtos = new ArrayList<>();
+        if (pictures != null && !pictures.isEmpty()) {
+            savePictures(pictures, hotel);  // Asynchronous save for pictures
 
-                savedPictures.add(pictureRepository.save(picture));
-            }
+            // After saving, we fetch the saved pictures from the repository
+            List<Picture> savedPictures = pictureRepository.findByHotelId(hotel.getId());
+
+            // Map the saved pictures to PictureResponseDto
+            pictureResponseDtos = savedPictures.stream()
+                    .map(picture -> new PictureResponseDto(picture.getId(), picture.getFileName(), picture.getFileType()))
+                    .collect(Collectors.toList());
         }
-
-        List<PictureResponseDto> pictureResponseDtos = savedPictures.stream()
-                .map(picture -> new PictureResponseDto(picture.getId(), picture.getFileName(), picture.getFileType()))
-                .collect(Collectors.toList());
 
         HotelDto hotelDto = new HotelDto(hotel.getId(), hotel.getName(), hotel.getState(), hotel.getLocation(), hotel.getAmenities(), hotel.getDescription(), pictureResponseDtos);
 
